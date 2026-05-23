@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blef Multiplayer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --felt: #0f4a32;
+      --felt-dark: #082b20;
+      --gold: #d9b55f;
+      --cream: #f5ebd0;
+      --ink: #1d1711;
+      --red: #b11f2f;
+      --panel: rgba(13, 29, 23, .92);
+      --line: rgba(245, 235, 208, .2);
+      --shadow: 0 18px 50px rgba(0, 0, 0, .35);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 1024px;
+      min-height: 100vh;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--cream);
+      background:
+        radial-gradient(circle at 50% 45%, rgba(255,255,255,.08), transparent 36%),
+        repeating-radial-gradient(circle at 50% 45%, rgba(255,255,255,.025) 0 2px, transparent 2px 8px),
+        linear-gradient(135deg, #061b14, #123f2d 48%, #061b14);
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: #1c1305;
+      background: linear-gradient(#f4d989, #c99a36);
+      box-shadow: 0 4px 0 rgba(77, 45, 0, .7);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button.secondary {
+      color: var(--cream);
+      background: rgba(255,255,255,.08);
+      box-shadow: none;
+    }
+
+    button.danger {
+      color: white;
+      background: linear-gradient(#c52d3b, #7d1725);
+      box-shadow: 0 4px 0 rgba(70, 0, 10, .7);
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: var(--cream);
+      background: rgba(0,0,0,.28);
+      outline: none;
+    }
+
+    select option { background: #10251d; }
+
+    .screen {
+      min-height: 100vh;
+      padding: 28px;
+      display: none;
+    }
+
+    .screen.active { display: block; }
+
+    .home {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 32px;
+    }
+
+    .home-card {
+      width: min(520px, 92vw);
+      border: 1px solid rgba(217,181,95,.5);
+      border-radius: 8px;
+      padding: 30px;
+      background: rgba(8, 31, 23, .94);
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      margin: 0 0 8px;
+      font-size: 54px;
+      letter-spacing: 0;
+      color: var(--gold);
+      text-align: center;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      color: rgba(245,235,208,.82);
+      text-align: center;
+      line-height: 1.45;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .join-row {
+      display: grid;
+      grid-template-columns: 1fr 160px;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .error {
+      min-height: 22px;
+      margin-top: 14px;
+      color: #ffb3bd;
+      text-align: center;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(720px, 1fr) 340px;
+      gap: 20px;
+      height: calc(100vh - 56px);
+    }
+
+    .table-wrap {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(217,181,95,.42);
+      border-radius: 8px;
+      background:
+        radial-gradient(ellipse at center, rgba(255,255,255,.08), transparent 46%),
+        radial-gradient(ellipse at center, #166444, var(--felt) 48%, var(--felt-dark));
+      box-shadow: inset 0 0 80px rgba(0,0,0,.42), var(--shadow);
+    }
+
+    .table-top {
+      position: absolute;
+      inset: 18px 18px auto 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      z-index: 4;
+    }
+
+    .room-code {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: rgba(245,235,208,.78);
+      font-size: 14px;
+    }
+
+    .room-code strong {
+      color: var(--gold);
+      font-size: 18px;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      top: 44%;
+      z-index: 5;
+      transform: translate(-50%, -50%);
+      max-width: 72%;
+      border: 1px solid rgba(217,181,95,.72);
+      border-radius: 8px;
+      padding: 14px 20px;
+      color: var(--cream);
+      background: rgba(5, 20, 15, .88);
+      text-align: center;
+      box-shadow: var(--shadow);
+      font-size: 20px;
+    }
+
+    .seats {
+      position: absolute;
+      inset: 72px 28px 190px;
+    }
+
+    .seat {
+      position: absolute;
+      width: 210px;
+      min-height: 116px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(3, 21, 15, .6);
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      transition: border-color .2s, transform .2s;
+    }
+
+    .seat.active {
+      border-color: var(--gold);
+      transform: translateY(-3px);
+      box-shadow: 0 0 0 2px rgba(217,181,95,.22), 0 14px 30px rgba(0,0,0,.3);
+    }
+
+    .seat.eliminated {
+      opacity: .52;
+      filter: grayscale(.55);
+    }
+
+    .seat-name {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: var(--gold);
+      font-weight: 700;
+    }
+
+    .badge {
+      border: 1px solid rgba(217,181,95,.42);
+      border-radius: 999px;
+      padding: 2px 7px;
+      color: rgba(245,235,208,.88);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .mini-cards, .hand {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      position: relative;
+      width: 48px;
+      height: 66px;
+      border: 1px solid rgba(0,0,0,.18);
+      border-radius: 6px;
+      padding: 5px;
+      color: var(--ink);
+      background: #fffaf0;
+      box-shadow: 0 4px 10px rgba(0,0,0,.22);
+      font-weight: 700;
+    }
+
+    .card.big {
+      width: 74px;
+      height: 104px;
+      padding: 8px;
+      font-size: 18px;
+    }
+
+    .card.red { color: var(--red); }
+    .card.back {
+      color: transparent;
+      background:
+        linear-gradient(45deg, rgba(255,255,255,.18) 25%, transparent 25% 50%, rgba(255,255,255,.18) 50% 75%, transparent 75%),
+        #722235;
+      background-size: 14px 14px;
+      border: 2px solid #f1dd9e;
+    }
+
+    .card .corner { line-height: 1.05; }
+    .card .pip {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 25px;
+    }
+    .card.big .pip { font-size: 42px; }
+
+    .player-hand {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      bottom: 20px;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 18px;
+      align-items: end;
+      z-index: 4;
+    }
+
+    .hand-panel, .turn-panel, .side-panel, .lobby-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .hand-panel { padding: 14px; }
+    .hand-title {
+      margin-bottom: 10px;
+      color: var(--gold);
+      font-weight: 700;
+    }
+
+    .turn-panel {
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .bid-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .turn-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .side-panel {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      overflow: hidden;
+    }
+
+    .side-section {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .side-section h2 {
+      margin: 0 0 10px;
+      color: var(--gold);
+      font-size: 20px;
+    }
+
+    .players-list, .history {
+      display: grid;
+      gap: 8px;
+      max-height: 170px;
+      overflow: auto;
+    }
+
+    .list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,.04);
+    }
+
+    .chat-log {
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message {
+      line-height: 1.35;
+      color: rgba(245,235,208,.9);
+    }
+    .message.system { color: #f4d989; font-style: italic; }
+    .message small { color: rgba(245,235,208,.55); }
+
+    .chat-form {
+      display: grid;
+      grid-template-columns: 1fr 46px;
+      gap: 8px;
+      padding: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .lobby-panel {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(560px, 80%);
+      transform: translate(-50%, -50%);
+      padding: 22px;
+      z-index: 7;
+    }
+
+    .lobby-panel h1 {
+      margin: 0 0 8px;
+      color: var(--gold);
+      text-align: center;
+    }
+
+    .lobby-link {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <main id="home" class="home">
+    <section class="home-card">
+      <h1 class="brand">Blef</h1>
+      <p class="subtitle">Polski Liar's Dice na kartach. Stwórz pokój, wyślij kod i blefuj przy zielonym stole.</p>
+      <label>Nick</label>
+      <input id="nick" maxlength="24" placeholder="Np. Szuler">
+      <div class="form-row">
+        <button id="createBtn">Stwórz pokój</button>
+        <button id="pasteLinkBtn" class="secondary">Użyj kodu z linku</button>
+      </div>
+      <div class="join-row">
+        <input id="roomInput" maxlength="12" placeholder="Kod pokoju">
+        <button id="joinBtn">Dołącz</button>
+      </div>
+      <div id="error" class="error"></div>
+    </section>
+  </main>
+
+  <main id="game" class="screen">
+    <div class="layout">
+      <section class="table-wrap">
+        <div class="table-top">
+          <div class="room-code">Pokój <strong id="roomCode">-</strong><button id="copyBtn" class="secondary">Kopiuj link</button></div>
+          <div id="turnInfo" class="room-code"></div>
+        </div>
+
+        <section id="lobby" class="lobby-panel hidden">
+          <h1>Poczekalnia</h1>
+          <p class="subtitle">Minimum 4 graczy. Gospodarz rozpoczyna partię, kiedy wszyscy są gotowi.</p>
+          <div class="lobby-link">
+            <input id="shareLink" readonly>
+            <button id="copyBtn2">Kopiuj</button>
+          </div>
+          <button id="startBtn" disabled>Rozpocznij grę</button>
+        </section>
+
+        <div id="toast" class="toast hidden"></div>
+        <div id="seats" class="seats"></div>
+
+        <section class="player-hand">
+          <div class="hand-panel">
+            <div class="hand-title">Twoje karty</div>
+            <div id="myHand" class="hand"></div>
+          </div>
+          <div id="turnPanel" class="turn-panel">
+            <strong>Ogłoszenie</strong>
+            <div class="bid-grid">
+              <select id="category"></select>
+              <select id="rankA"></select>
+              <select id="rankB"></select>
+              <select id="suit"></select>
+            </div>
+            <div class="turn-actions">
+              <button id="bidBtn">Ogłoś</button>
+              <button id="challengeBtn" class="danger">Sprawdzam!</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="side-panel">
+        <section class="side-section">
+          <h2>Gracze</h2>
+          <div id="playersList" class="players-list"></div>
+        </section>
+        <section class="side-section">
+          <h2>Historia rundy</h2>
+          <div id="history" class="history"></div>
+        </section>
+        <section id="chatLog" class="chat-log"></section>
+        <form id="chatForm" class="chat-form">
+          <input id="chatInput" maxlength="400" placeholder="Wiadomość">
+          <button title="Wyślij">↵</button>
+        </form>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = { ws: null, data: null, playerId: null };
+    const rankValues = [
+      ["2", 2], ["3", 3], ["4", 4], ["5", 5], ["6", 6], ["7", 7], ["8", 8], ["9", 9],
+      ["10", 10], ["J", 11], ["Q", 12], ["K", 13], ["A", 14],
+    ];
+    const categoryLabels = {
+      high: "Wysoka karta",
+      pair: "Para",
+      twoPair: "Dwie pary",
+      three: "Trójka",
+      straight: "Strit",
+      flush: "Kolor",
+      full: "Full",
+      four: "Kareta",
+      straightFlush: "Poker",
+    };
+    const suits = [["S", "♠ pik"], ["H", "♥ kier"], ["D", "♦ karo"], ["C", "♣ trefl"]];
+    const suitIcons = { S: "♠", H: "♥", D: "♦", C: "♣" };
+
+    function connect() {
+      if (state.ws && state.ws.readyState <= 1) return state.ws;
+      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+      state.ws = new WebSocket(`${protocol}//${location.host}`);
+      state.ws.addEventListener("message", (event) => {
+        const data = JSON.parse(event.data);
+        if (data.error) showError(data.error);
+        if (data.roomId) {
+          state.data = data;
+          state.playerId = data.playerId;
+          render();
+        }
+      });
+      state.ws.addEventListener("close", () => showError("Połączenie z serwerem zostało przerwane."));
+      return state.ws;
+    }
+
+    function send(message) {
+      const ws = connect();
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+      else ws.addEventListener("open", () => ws.send(JSON.stringify(message)), { once: true });
+    }
+
+    function showError(text) {
+      $("error").textContent = text || "";
+      if (state.data) {
+        const toast = $("toast");
+        toast.textContent = text;
+        toast.classList.toggle("hidden", !text);
+      }
+    }
+
+    function cleanRoom(value) {
+      return String(value || "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+    }
+
+    function nick() {
+      return $("nick").value.trim() || `Gracz-${Math.floor(Math.random() * 90 + 10)}`;
+    }
+
+    function initSelects() {
+      $("category").innerHTML = Object.entries(categoryLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+      $("rankA").innerHTML = rankValues.map(([label, value]) => `<option value="${value}">${label}</option>`).join("");
+      $("rankB").innerHTML = rankValues.map(([label, value]) => `<option value="${value}">${label}</option>`).join("");
+      $("suit").innerHTML = suits.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+      $("rankA").value = "9";
+      $("rankB").value = "8";
+    }
+
+    function render() {
+      const data = state.data;
+      if (!data) return;
+      $("home").classList.remove("active");
+      $("home").style.display = "none";
+      $("game").classList.add("active");
+      $("roomCode").textContent = data.roomId;
+      const link = `${location.origin}${location.pathname}?room=${data.roomId}`;
+      $("shareLink").value = link;
+      $("lobby").classList.toggle("hidden", data.status !== "lobby");
+      $("startBtn").disabled = !(data.you && data.you.host && data.players.length >= 4);
+      $("turnInfo").textContent = data.status === "game" ? turnText(data) : `${data.players.length}/4+ graczy`;
+      $("toast").textContent = data.toast || "";
+      $("toast").classList.toggle("hidden", !data.toast);
+      renderPlayers(data);
+      renderSeats(data);
+      renderHand(data.you ? data.you.hand : []);
+      renderHistory(data);
+      renderChat(data);
+      renderTurnPanel(data);
+      history.replaceState(null, "", `?room=${data.roomId}`);
+    }
+
+    function turnText(data) {
+      const active = data.players.find((p) => p.id === data.activeId);
+      if (data.status === "finished") return "Koniec gry";
+      return active ? `Tura: ${active.nick}` : "";
+    }
+
+    function renderPlayers(data) {
+      $("playersList").innerHTML = data.players.map((p) => `
+        <div class="list-item">
+          <span>${escapeHtml(p.nick)}${p.isYou ? " (ty)" : ""}</span>
+          <span class="badge">${p.host ? "gospodarz" : p.eliminated ? "odpadł" : p.connected ? `${p.handCount} kart` : "offline"}</span>
+        </div>
+      `).join("");
+    }
+
+    function renderSeats(data) {
+      const seats = $("seats");
+      const count = Math.max(data.players.length, 1);
+      seats.innerHTML = data.players.map((p, index) => {
+        const pos = seatPosition(index, count);
+        const hand = p.hand ? p.hand.map(cardHtml).join("") : Array.from({ length: p.handCount }, () => `<div class="card back"></div>`).join("");
+        return `
+          <div class="seat ${p.id === data.activeId ? "active" : ""} ${p.eliminated ? "eliminated" : ""}" style="left:${pos.x}%;top:${pos.y}%;">
+            <div class="seat-name"><span>${escapeHtml(p.nick)}</span><span class="badge">${p.connected ? "online" : "offline"}</span></div>
+            <div class="mini-cards">${hand}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function seatPosition(index, count) {
+      const angle = (-90 + index * 360 / count) * Math.PI / 180;
+      const x = 50 + Math.cos(angle) * 38;
+      const y = 48 + Math.sin(angle) * 39;
+      return { x: Math.max(3, Math.min(77, x)), y: Math.max(2, Math.min(74, y)) };
+    }
+
+    function renderHand(hand) {
+      $("myHand").innerHTML = (hand || []).map((card) => cardHtml(card, "big")).join("") || `<span class="subtitle">Czekasz na rozdanie.</span>`;
+    }
+
+    function cardHtml(card, size = "") {
+      const red = card.suit === "H" || card.suit === "D";
+      return `<div class="card ${size} ${red ? "red" : ""}"><div class="corner">${card.rank}<br>${suitIcons[card.suit]}</div><div class="pip">${suitIcons[card.suit]}</div></div>`;
+    }
+
+    function renderHistory(data) {
+      $("history").innerHTML = data.bidHistory.length ? data.bidHistory.map((item) => `
+        <div class="list-item"><span>${escapeHtml(item.nick)}</span><span>${escapeHtml(item.text)}</span></div>
+      `).join("") : `<div class="message system">Brak ogłoszeń w tej rundzie.</div>`;
+    }
+
+    function renderChat(data) {
+      const log = $("chatLog");
+      log.innerHTML = data.chat.map((m) => {
+        const time = new Date(m.at).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+        if (m.system) return `<div class="message system"><small>${time}</small> ${escapeHtml(m.text)}</div>`;
+        return `<div class="message"><small>${time}</small> <strong>${escapeHtml(m.nick)}:</strong> ${escapeHtml(m.text)}</div>`;
+      }).join("");
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function renderTurnPanel(data) {
+      const yourTurn = data.status === "game" && data.activeId === data.playerId && !data.revealed;
+      $("turnPanel").style.opacity = yourTurn ? "1" : ".48";
+      $("bidBtn").disabled = !yourTurn;
+      $("challengeBtn").disabled = !yourTurn || !data.currentBid;
+      $("challengeBtn").classList.toggle("hidden", !data.currentBid);
+      adaptBidControls();
+    }
+
+    function adaptBidControls() {
+      const cat = $("category").value;
+      const needsB = cat === "twoPair" || cat === "full";
+      const needsSuit = cat === "flush" || cat === "straightFlush";
+      $("rankB").classList.toggle("hidden", !needsB);
+      $("suit").classList.toggle("hidden", !needsSuit);
+    }
+
+    function submitBid() {
+      const category = $("category").value;
+      const values = [Number($("rankA").value)];
+      if (category === "twoPair" || category === "full") values.push(Number($("rankB").value));
+      send({ type: "bid", category, values, suit: $("suit").value });
+    }
+
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
+    }
+
+    $("createBtn").addEventListener("click", () => send({ type: "create", nick: nick() }));
+    $("joinBtn").addEventListener("click", () => send({ type: "join", nick: nick(), room: cleanRoom($("roomInput").value) }));
+    $("pasteLinkBtn").addEventListener("click", () => {
+      const room = new URLSearchParams(location.search).get("room");
+      if (room) $("roomInput").value = room;
+    });
+    $("startBtn").addEventListener("click", () => send({ type: "start" }));
+    $("bidBtn").addEventListener("click", submitBid);
+    $("challengeBtn").addEventListener("click", () => send({ type: "challenge" }));
+    $("category").addEventListener("change", adaptBidControls);
+    $("copyBtn").addEventListener("click", copyLink);
+    $("copyBtn2").addEventListener("click", copyLink);
+    $("chatForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const text = $("chatInput").value.trim();
+      if (text) send({ type: "chat", text });
+      $("chatInput").value = "";
+    });
+
+    function copyLink() {
+      const link = `${location.origin}${location.pathname}?room=${state.data ? state.data.roomId : cleanRoom($("roomInput").value)}`;
+      navigator.clipboard?.writeText(link);
+      showError("Link skopiowany.");
+      setTimeout(() => showError(""), 1200);
+    }
+
+    initSelects();
+    const roomFromUrl = new URLSearchParams(location.search).get("room");
+    if (roomFromUrl) $("roomInput").value = cleanRoom(roomFromUrl);
+  </script>
+</body>
+</html>
