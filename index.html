@@ -438,7 +438,7 @@
     <div class="layout">
       <section class="table-wrap">
         <div class="table-top">
-          <div class="room-code">Pokój <strong id="roomCode">-</strong><button id="copyBtn" class="secondary">Kopiuj link</button></div>
+          <div class="room-code">Pokój <strong id="roomCode">-</strong><span id="versionTag" class="badge"></span><button id="copyBtn" class="secondary">Kopiuj link</button></div>
           <div id="turnInfo" class="room-code"></div>
         </div>
 
@@ -568,6 +568,7 @@
       $("home").style.display = "none";
       $("game").classList.add("active");
       $("roomCode").textContent = data.roomId;
+      $("versionTag").textContent = data.version || "";
       const link = `${location.origin}${location.pathname}?room=${data.roomId}`;
       $("shareLink").value = link;
       $("lobby").classList.toggle("hidden", data.status !== "lobby");

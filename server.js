@@ -5,6 +5,7 @@ const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
+const GAME_VERSION = "rules-2026-05-24-1";
 const rooms = new Map();
 const sockets = new Map();
 
@@ -324,6 +325,7 @@ function viewFor(room, viewerId, envelope = { type: "state" }) {
     activeId: room.activeId,
     currentBid: room.currentBid ? { ...room.currentBid, text: describeBid(room.currentBid) } : null,
     minRankValue: room.minValue || deckMinValue(room.players.length || 4),
+    version: GAME_VERSION,
     bidHistory: room.bidHistory,
     chat: room.chat,
     toast: room.toast,
@@ -433,6 +435,14 @@ function disconnect(ws) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  if (url.pathname === "/version") {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify({ version: GAME_VERSION }));
+    return;
+  }
   const file = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
   const safe = path.normalize(file).replace(/^(\.\.[/\\])+/, "");
   const full = path.join(ROOT, safe);
@@ -442,7 +452,12 @@ const server = http.createServer((req, res) => {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": contentType(full) });
+    res.writeHead(200, {
+      "Content-Type": contentType(full),
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+    });
     res.end(data);
   });
 });
