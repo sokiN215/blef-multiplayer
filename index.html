@@ -557,11 +557,8 @@
 
     function initSelects() {
       $("category").innerHTML = Object.entries(categoryLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
-      $("rankA").innerHTML = rankValues.map(([label, value]) => `<option value="${value}">${label}</option>`).join("");
-      $("rankB").innerHTML = rankValues.map(([label, value]) => `<option value="${value}">${label}</option>`).join("");
       $("suit").innerHTML = suits.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
-      $("rankA").value = "9";
-      $("rankB").value = "8";
+      updateRankControls({ minRankValue: 9 });
     }
 
     function render() {
@@ -655,15 +652,44 @@
       $("bidBtn").disabled = !yourTurn;
       $("challengeBtn").disabled = !yourTurn || !data.currentBid;
       $("challengeBtn").classList.toggle("hidden", !data.currentBid);
-      adaptBidControls();
+      updateRankControls(data);
     }
 
-    function adaptBidControls() {
+    function updateRankControls(data) {
+      const cat = $("category").value;
+      fillRankSelect($("rankA"), rankOptionsFor(cat, data.minRankValue), $("rankA").value);
+      fillRankSelect($("rankB"), rankOptionsFor("plain", data.minRankValue), $("rankB").value);
+      updateRankVisibility();
+    }
+
+    function updateRankVisibility() {
       const cat = $("category").value;
       const needsB = cat === "twoPair" || cat === "full";
       const needsSuit = cat === "flush" || cat === "straightFlush";
       $("rankB").classList.toggle("hidden", !needsB);
       $("suit").classList.toggle("hidden", !needsSuit);
+    }
+
+    function rankOptionsFor(category, minRankValue) {
+      const min = Number(minRankValue || 9);
+      const minAllowed = category === "straight" || category === "straightFlush" || category === "flush" ? min + 4 : min;
+      return rankValues
+        .filter(([, value]) => value >= minAllowed)
+        .map(([label, value]) => ({
+          label: category === "straight" || category === "straightFlush" ? `${rankLabel(value - 4)}-${label}` : label,
+          value,
+        }));
+    }
+
+    function fillRankSelect(select, options, previous) {
+      select.innerHTML = options.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
+      const values = options.map((option) => String(option.value));
+      select.value = values.includes(String(previous)) ? String(previous) : values[0];
+    }
+
+    function rankLabel(value) {
+      const found = rankValues.find(([, rankValue]) => rankValue === value);
+      return found ? found[0] : String(value);
     }
 
     function submitBid() {
@@ -686,7 +712,7 @@
     $("startBtn").addEventListener("click", () => send({ type: "start" }));
     $("bidBtn").addEventListener("click", submitBid);
     $("challengeBtn").addEventListener("click", () => send({ type: "challenge" }));
-    $("category").addEventListener("change", adaptBidControls);
+    $("category").addEventListener("change", () => updateRankControls(state.data || { minRankValue: 9 }));
     $("copyBtn").addEventListener("click", copyLink);
     $("copyBtn2").addEventListener("click", copyLink);
     $("chatForm").addEventListener("submit", (event) => {

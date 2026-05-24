@@ -59,14 +59,28 @@ function valueRank(value) {
   return ranks[value - 2];
 }
 
-function makeDeck(playerCount) {
-  const minValue = Math.max(2, 13 - playerCount);
+function makeDeck(playerCount, fixedMinValue) {
+  const minValue = fixedMinValue || deckMinValue(playerCount);
   const deck = [];
   for (const rank of ranks) {
     if (cardValue(rank) < minValue) continue;
     for (const suit of suits) deck.push({ rank, suit });
   }
   return shuffle(deck);
+}
+
+function deckMinValue(playerCount) {
+  return Math.max(2, 13 - playerCount);
+}
+
+function allowedRankValues(room) {
+  const minValue = room.minValue || deckMinValue(alive(room).length || room.players.length || 4);
+  return ranks.map(cardValue).filter((value) => value >= minValue);
+}
+
+function straightHighValues(room) {
+  const minValue = room.minValue || deckMinValue(alive(room).length || room.players.length || 4);
+  return ranks.map(cardValue).filter((value) => value >= minValue + 4);
 }
 
 function shuffle(deck) {
@@ -93,6 +107,7 @@ function createRoom(hostNick) {
     activeId: null,
     previousActorId: null,
     currentBid: null,
+    minValue: 9,
     bidHistory: [],
     chat: [],
     toast: "",
@@ -142,6 +157,7 @@ function startGame(room) {
   if (room.players.length < 4) throw new Error("Potrzeba minimum 4 graczy.");
   room.status = "game";
   room.round = 0;
+  room.minValue = deckMinValue(room.players.length);
   room.players.forEach((p) => {
     p.eliminated = false;
     p.hand = [];
@@ -158,13 +174,14 @@ function newRound(room, starterId, deal = false) {
   room.bidHistory = [];
   room.previousActorId = null;
   if (deal || room.deck.length < room.players.length * 5) {
+    const handSizes = new Map(room.players.map((p) => [p.id, deal ? 1 : p.hand.length]));
     room.discard.push(...room.players.flatMap((p) => p.hand));
-    room.deck = makeDeck(alive(room).length || room.players.length);
+    room.deck = makeDeck(room.players.length, room.minValue);
     room.discard = [];
     for (const p of room.players) {
       if (p.eliminated) continue;
       p.hand = [];
-      const count = Math.min(5, Math.max(4, p.hand.length || 4));
+      const count = Math.max(1, Math.min(5, handSizes.get(p.id) || 1));
       for (let i = 0; i < count; i += 1) p.hand.push(draw(room));
     }
   }
@@ -212,10 +229,13 @@ function compareBid(a, b) {
   return 0;
 }
 
-function validateBid(bid, previous) {
+function validateBid(bid, previous, room) {
   if (!bid || !categories.includes(bid.category)) throw new Error("Niepoprawne ogloszenie.");
   bid.values = normalizeBidValues(bid);
   if (["flush", "straightFlush"].includes(bid.category) && !suits.includes(bid.suit)) throw new Error("Wybierz kolor.");
+  const legalValues = ["straight", "straightFlush", "flush"].includes(bid.category) ? straightHighValues(room) : allowedRankValues(room);
+  if (!bid.values.every((value) => legalValues.includes(value))) throw new Error("Ta karta nie wystepuje w aktualnej talii.");
+  if (["twoPair", "full"].includes(bid.category) && bid.values[0] === bid.values[1]) throw new Error("Wybierz dwie rozne wartosci.");
   if (previous && compareBid(bid, previous) <= 0) throw new Error("Ogloszenie musi byc wyzsze od poprzedniego.");
   return bid;
 }
@@ -275,6 +295,7 @@ function challenge(room, challengerId) {
   system(room, `${challenger.nick} sprawdza: ${describeBid(room.currentBid)}. Ogloszenie bylo ${trueBid ? "prawdziwe" : "falszywe"}.`);
   const loser = trueBid ? challenger : checked;
   applyPenalty(room, loser.id);
+  room.revealCards = room.players.map((p) => ({ id: p.id, nick: p.nick, hand: p.hand, eliminated: p.eliminated }));
   const winners = alive(room);
   if (winners.length <= 1) {
     room.status = "finished";
@@ -302,6 +323,7 @@ function viewFor(room, viewerId, envelope = { type: "state" }) {
     hostId: room.hostId,
     activeId: room.activeId,
     currentBid: room.currentBid ? { ...room.currentBid, text: describeBid(room.currentBid) } : null,
+    minRankValue: room.minValue || deckMinValue(room.players.length || 4),
     bidHistory: room.bidHistory,
     chat: room.chat,
     toast: room.toast,
@@ -360,7 +382,7 @@ function handleMessage(ws, raw) {
     if (message.type === "bid") {
       if (room.status !== "game") throw new Error("Gra nie trwa.");
       if (room.activeId !== player.id) throw new Error("To nie twoja tura.");
-      const bid = validateBid({ category: message.category, values: message.values, suit: message.suit }, room.currentBid);
+      const bid = validateBid({ category: message.category, values: message.values, suit: message.suit }, room.currentBid, room);
       room.currentBid = bid;
       room.previousActorId = player.id;
       room.bidHistory.push({ playerId: player.id, nick: player.nick, text: describeBid(bid), at: Date.now() });
