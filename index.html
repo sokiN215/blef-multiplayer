@@ -13,6 +13,7 @@
       --cream: #f5ebd0;
       --ink: #1d1711;
       --red: #b11f2f;
+      --green-soft: #2d8c62;
       --panel: rgba(13, 29, 23, .92);
       --line: rgba(245, 235, 208, .2);
       --shadow: 0 18px 50px rgba(0, 0, 0, .35);
@@ -23,7 +24,7 @@
       margin: 0;
       min-width: 1024px;
       min-height: 100vh;
-      font-family: Georgia, "Times New Roman", serif;
+      font-family: "Trebuchet MS", Georgia, serif;
       color: var(--cream);
       background:
         radial-gradient(circle at 50% 45%, rgba(255,255,255,.08), transparent 36%),
@@ -106,6 +107,7 @@
       letter-spacing: 0;
       color: var(--gold);
       text-align: center;
+      font-family: Georgia, "Times New Roman", serif;
     }
 
     .subtitle {
@@ -196,7 +198,7 @@
 
     .seats {
       position: absolute;
-      inset: 72px 28px 190px;
+      inset: 72px 28px 130px;
     }
 
     .seat {
@@ -209,12 +211,25 @@
       background: rgba(3, 21, 15, .6);
       box-shadow: 0 10px 24px rgba(0,0,0,.22);
       transition: border-color .2s, transform .2s;
+      transform: translate(-50%, -50%);
     }
 
     .seat.active {
       border-color: var(--gold);
-      transform: translateY(-3px);
+      transform: translate(-50%, calc(-50% - 3px));
       box-shadow: 0 0 0 2px rgba(217,181,95,.22), 0 14px 30px rgba(0,0,0,.3);
+    }
+
+    .seat.you {
+      width: 330px;
+      min-height: 146px;
+      border-color: rgba(217,181,95,.72);
+      background: rgba(8, 36, 27, .82);
+    }
+
+    .seat.you .seat-name {
+      border-bottom: 2px solid var(--gold);
+      padding-bottom: 5px;
     }
 
     .seat.eliminated {
@@ -288,28 +303,18 @@
 
     .player-hand {
       position: absolute;
-      left: 26px;
-      right: 26px;
-      bottom: 20px;
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 18px;
-      align-items: end;
+      left: 50%;
+      bottom: 16px;
+      width: min(430px, calc(100% - 52px));
+      transform: translateX(-50%);
       z-index: 4;
     }
 
-    .hand-panel, .turn-panel, .side-panel, .lobby-panel {
+    .turn-panel, .side-panel, .lobby-panel {
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
       box-shadow: var(--shadow);
-    }
-
-    .hand-panel { padding: 14px; }
-    .hand-title {
-      margin-bottom: 10px;
-      color: var(--gold);
-      font-weight: 700;
     }
 
     .turn-panel {
@@ -413,6 +418,16 @@
     }
 
     .hidden { display: none !important; }
+
+    .app-version {
+      position: fixed;
+      left: 10px;
+      bottom: 8px;
+      z-index: 20;
+      color: rgba(245,235,208,.48);
+      font-size: 11px;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -438,7 +453,7 @@
     <div class="layout">
       <section class="table-wrap">
         <div class="table-top">
-          <div class="room-code">Pokój <strong id="roomCode">-</strong><span id="versionTag" class="badge"></span><button id="copyBtn" class="secondary">Kopiuj link</button></div>
+          <div class="room-code">Pokój <strong id="roomCode">-</strong><button id="copyBtn" class="secondary">Kopiuj link</button></div>
           <div id="turnInfo" class="room-code"></div>
         </div>
 
@@ -456,10 +471,6 @@
         <div id="seats" class="seats"></div>
 
         <section class="player-hand">
-          <div class="hand-panel">
-            <div class="hand-title">Twoje karty</div>
-            <div id="myHand" class="hand"></div>
-          </div>
           <div id="turnPanel" class="turn-panel">
             <strong>Ogłoszenie</strong>
             <div class="bid-grid">
@@ -493,10 +504,12 @@
       </aside>
     </div>
   </main>
+  <div id="appVersion" class="app-version">version: 0.3 by nikoS</div>
 
   <script>
     const $ = (id) => document.getElementById(id);
     const state = { ws: null, data: null, playerId: null };
+    const APP_VERSION = "0.3";
     const rankValues = [
       ["2", 2], ["3", 3], ["4", 4], ["5", 5], ["6", 6], ["7", 7], ["8", 8], ["9", 9],
       ["10", 10], ["J", 11], ["Q", 12], ["K", 13], ["A", 14],
@@ -525,6 +538,7 @@
         if (data.roomId) {
           state.data = data;
           state.playerId = data.playerId;
+          rememberSession(data);
           render();
         }
       });
@@ -568,7 +582,7 @@
       $("home").style.display = "none";
       $("game").classList.add("active");
       $("roomCode").textContent = data.roomId;
-      $("versionTag").textContent = data.version || "";
+      $("appVersion").textContent = `version: ${APP_VERSION} by nikoS`;
       const link = `${location.origin}${location.pathname}?room=${data.roomId}`;
       $("shareLink").value = link;
       $("lobby").classList.toggle("hidden", data.status !== "lobby");
@@ -578,7 +592,6 @@
       $("toast").classList.toggle("hidden", !data.toast);
       renderPlayers(data);
       renderSeats(data);
-      renderHand(data.you ? data.you.hand : []);
       renderHistory(data);
       renderChat(data);
       renderTurnPanel(data);
@@ -602,13 +615,15 @@
 
     function renderSeats(data) {
       const seats = $("seats");
-      const count = Math.max(data.players.length, 1);
-      seats.innerHTML = data.players.map((p, index) => {
-        const pos = seatPosition(index, count);
-        const hand = p.hand ? p.hand.map(cardHtml).join("") : Array.from({ length: p.handCount }, () => `<div class="card back"></div>`).join("");
+      const others = data.players.filter((p) => !p.isYou);
+      const ordered = [...others, ...data.players.filter((p) => p.isYou)];
+      const otherCount = Math.max(others.length, 1);
+      seats.innerHTML = ordered.map((p, index) => {
+        const pos = p.isYou ? { x: 50, y: 86 } : seatPosition(index, otherCount);
+        const hand = p.hand ? p.hand.map((card) => cardHtml(card, p.isYou ? "big" : "")).join("") : Array.from({ length: p.handCount }, () => `<div class="card back"></div>`).join("");
         return `
-          <div class="seat ${p.id === data.activeId ? "active" : ""} ${p.eliminated ? "eliminated" : ""}" style="left:${pos.x}%;top:${pos.y}%;">
-            <div class="seat-name"><span>${escapeHtml(p.nick)}</span><span class="badge">${p.connected ? "online" : "offline"}</span></div>
+          <div class="seat ${p.isYou ? "you" : ""} ${p.id === data.activeId ? "active" : ""} ${p.eliminated ? "eliminated" : ""}" style="left:${pos.x}%;top:${pos.y}%;">
+            <div class="seat-name"><span>${escapeHtml(p.nick)}${p.isYou ? " (ty)" : ""}</span><span class="badge">${p.connected ? "online" : "offline"}</span></div>
             <div class="mini-cards">${hand}</div>
           </div>
         `;
@@ -616,14 +631,10 @@
     }
 
     function seatPosition(index, count) {
-      const angle = (-90 + index * 360 / count) * Math.PI / 180;
-      const x = 50 + Math.cos(angle) * 38;
-      const y = 48 + Math.sin(angle) * 39;
-      return { x: Math.max(3, Math.min(77, x)), y: Math.max(2, Math.min(74, y)) };
-    }
-
-    function renderHand(hand) {
-      $("myHand").innerHTML = (hand || []).map((card) => cardHtml(card, "big")).join("") || `<span class="subtitle">Czekasz na rozdanie.</span>`;
+      const angle = (-150 + (count === 1 ? 0.5 : index / (count - 1)) * 120) * Math.PI / 180;
+      const x = 50 + Math.cos(angle) * 36;
+      const y = 48 + Math.sin(angle) * 34;
+      return { x: Math.max(12, Math.min(88, x)), y: Math.max(10, Math.min(62, y)) };
     }
 
     function cardHtml(card, size = "") {
@@ -649,6 +660,7 @@
 
     function renderTurnPanel(data) {
       const yourTurn = data.status === "game" && data.activeId === data.playerId && !data.revealed;
+      $("turnPanel").classList.toggle("hidden", data.status !== "game");
       $("turnPanel").style.opacity = yourTurn ? "1" : ".48";
       $("bidBtn").disabled = !yourTurn;
       $("challengeBtn").disabled = !yourTurn || !data.currentBid;
@@ -704,8 +716,41 @@
       return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
     }
 
+    function sessionKey(room) {
+      return `blef-session-${cleanRoom(room)}`;
+    }
+
+    function savedSession(room) {
+      try {
+        return JSON.parse(localStorage.getItem(sessionKey(room)) || "null");
+      } catch {
+        return null;
+      }
+    }
+
+    function rememberSession(data) {
+      if (!data.roomId || !data.playerId || !data.playerToken) return;
+      localStorage.setItem(sessionKey(data.roomId), JSON.stringify({
+        playerId: data.playerId,
+        playerToken: data.playerToken,
+        nick: data.you ? data.you.nick : nick(),
+      }));
+    }
+
+    function joinPayload() {
+      const room = cleanRoom($("roomInput").value);
+      const saved = savedSession(room);
+      return {
+        type: "join",
+        nick: nick(),
+        room,
+        playerId: saved ? saved.playerId : null,
+        playerToken: saved ? saved.playerToken : null,
+      };
+    }
+
     $("createBtn").addEventListener("click", () => send({ type: "create", nick: nick() }));
-    $("joinBtn").addEventListener("click", () => send({ type: "join", nick: nick(), room: cleanRoom($("roomInput").value) }));
+    $("joinBtn").addEventListener("click", () => send(joinPayload()));
     $("pasteLinkBtn").addEventListener("click", () => {
       const room = new URLSearchParams(location.search).get("room");
       if (room) $("roomInput").value = room;
@@ -732,7 +777,15 @@
 
     initSelects();
     const roomFromUrl = new URLSearchParams(location.search).get("room");
-    if (roomFromUrl) $("roomInput").value = cleanRoom(roomFromUrl);
+    if (roomFromUrl) {
+      const room = cleanRoom(roomFromUrl);
+      $("roomInput").value = room;
+      const saved = savedSession(room);
+      if (saved) {
+        $("nick").value = saved.nick || "";
+        send({ type: "rejoin", room, playerId: saved.playerId, playerToken: saved.playerToken });
+      }
+    }
   </script>
 </body>
 </html>

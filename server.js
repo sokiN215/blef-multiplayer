@@ -5,7 +5,7 @@ const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
-const GAME_VERSION = "rules-2026-05-24-1";
+const GAME_VERSION = "0.3";
 const rooms = new Map();
 const sockets = new Map();
 
@@ -124,6 +124,7 @@ function createRoom(hostNick) {
 function addPlayer(room, nick, host = false) {
   const player = {
     id: id(10),
+    token: id(18),
     nick: String(nick || "Gracz").trim().slice(0, 24) || "Gracz",
     hand: [],
     connected: true,
@@ -326,6 +327,7 @@ function viewFor(room, viewerId, envelope = { type: "state" }) {
     currentBid: room.currentBid ? { ...room.currentBid, text: describeBid(room.currentBid) } : null,
     minRankValue: room.minValue || deckMinValue(room.players.length || 4),
     version: GAME_VERSION,
+    playerToken: viewer ? viewer.token : null,
     bidHistory: room.bidHistory,
     chat: room.chat,
     toast: room.toast,
@@ -360,10 +362,28 @@ function handleMessage(ws, raw) {
     if (message.type === "join") {
       const room = rooms.get(String(message.room || "").toUpperCase());
       if (!room) throw new Error("Nie znaleziono pokoju.");
-      if (room.status !== "lobby") throw new Error("Gra w tym pokoju juz trwa.");
-      const player = addPlayer(room, message.nick);
+      const normalizedNick = String(message.nick || "").trim().toLowerCase();
+      let player = null;
+      if (message.playerId && message.playerToken) {
+        player = room.players.find((p) => p.id === message.playerId && p.token === message.playerToken && !p.eliminated);
+      }
+      if (!player && room.status !== "lobby") {
+        player = room.players.find((p) => !p.connected && !p.eliminated && p.nick.toLowerCase() === normalizedNick);
+      }
+      if (!player && room.status !== "lobby") throw new Error("Gra w tym pokoju juz trwa. Rejoin wymaga tego samego nicku albo tej samej przegladarki.");
+      if (!player) player = addPlayer(room, message.nick);
       attach(ws, room, player);
-      system(room, `${player.nick} dolacza do pokoju.`);
+      system(room, `${player.nick} ${room.status === "lobby" ? "dolacza do pokoju" : "wraca do gry"}.`);
+      broadcast(room, { type: "state" });
+      return;
+    }
+    if (message.type === "rejoin") {
+      const room = rooms.get(String(message.room || "").toUpperCase());
+      if (!room) throw new Error("Nie znaleziono pokoju.");
+      const player = room.players.find((p) => p.id === message.playerId && p.token === message.playerToken && !p.eliminated);
+      if (!player) throw new Error("Nie udalo sie wrocic do gry.");
+      attach(ws, room, player);
+      system(room, `${player.nick} wraca do gry.`);
       broadcast(room, { type: "state" });
       return;
     }
@@ -417,6 +437,7 @@ function disconnect(ws) {
   sockets.delete(ws);
   if (!session) return;
   const { room, player } = session;
+  if (player.ws !== ws) return;
   player.connected = false;
   if (room.status === "lobby") {
     room.players = room.players.filter((p) => p.id !== player.id);
